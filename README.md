@@ -6,7 +6,7 @@ colorTo: green
 sdk: docker
 app_port: 7860
 license: mit
-short_description: OpenEnv environment for UPI fraud prevention and recovery in India
+short_description: OpenEnv for UPI fraud prevention and recovery
 ---
 
 # UPI Fraud Prevention & Recovery — OpenEnv
