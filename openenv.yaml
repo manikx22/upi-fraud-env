@@ -1,0 +1,179 @@
+name: upi-fraud-env
+version: "1.0.0"
+description: >
+  An OpenEnv-compliant environment simulating real-world UPI fraud prevention
+  and recovery in India. An AI agent guides a young mobile user through active
+  scam scenarios — choosing protective actions to prevent loss or recover money.
+  Covers the most prevalent UPI fraud types in India (2024–2025 NPCI data).
+
+domain: financial_safety
+task_type: sequential_decision_making
+real_world: true
+country: India
+language: English
+
+tags:
+  - upi
+  - fraud_prevention
+  - india
+  - fintech
+  - mobile_safety
+  - openenv
+
+author: openenv-submission
+license: MIT
+
+tasks:
+  - id: easy
+    name: "Spot the Scam — Basic Prevention"
+    difficulty: easy
+    n_scenarios: 3
+    success_threshold: 0.70
+    description: >
+      3 easy scam scenarios (collect request, fake cashback, QR reversal).
+      Agent must decline/ignore/block without making any dangerous actions.
+
+  - id: medium
+    name: "Damage Control — Recovery Sequence"
+    difficulty: medium
+    n_scenarios: 2
+    success_threshold: 0.65
+    description: >
+      Mixed easy+medium scenarios. Money already lost in one. Agent must
+      execute the correct recovery sequence AND resist re-victimisation.
+      Credential sharing caps score at 0.30.
+
+  - id: hard
+    name: "Multi-Vector Attack — Full Defense"
+    difficulty: hard
+    n_scenarios: 2
+    success_threshold: 0.75
+    description: >
+      Two hard scenarios including police impersonation and screen-share attack.
+      10+ turns. Credential sharing incurs −0.4 penalty. Missing recovery caps at 0.40.
+
+scam_types:
+  - collect_request    # Fake utility/landlord UPI collect
+  - otp_theft          # Bank/government KYC OTP theft
+  - fake_refund        # Amazon/LIC cashback advance fee
+  - qr_reversal        # OLX/marketplace QR that debits instead of credits
+  - job_fraud          # Work-from-home registration fee / task fraud
+  - impersonation      # Fake bank/NPCI/police caller
+  - screen_share       # QuickSupport/AnyDesk remote access takeover
+  - phishing_link      # Fake customer care search result
+
+action_space:
+  type: discrete
+  size: 18
+  safe_actions:
+    - decline_request
+    - hang_up
+    - block_contact
+    - ignore
+    - call_bank_helpline
+    - raise_upi_dispute
+    - report_to_npci
+    - file_cybercrime
+    - verify_upi_id
+    - check_qr_code
+    - call_official_number
+    - share_with_family
+    - take_screenshot
+    - do_nothing
+  dangerous_actions:
+    - share_otp
+    - share_pin
+    - pay_scammer
+    - scan_qr
+
+observation_space:
+  type: structured
+  model: TurnObservation
+  fields:
+    turn_id:            {type: int,         description: Current turn index in scenario}
+    scenario_id:        {type: str,         description: Unique scenario identifier (SC001-SC017)}
+    scam_type:          {type: str,         description: Category of scam}
+    difficulty:         {type: str,         description: easy / medium / hard}
+    amount_at_risk:     {type: int,         description: INR amount the scammer is targeting}
+    amount_lost:        {type: int,         description: INR already transferred to scammer}
+    user_profile:       {type: str,         description: Victim description (age, city, occupation)}
+    context:            {type: str,         description: Current situation description}
+    scammer_message:    {type: "str|null",    description: What the scammer just said or sent}
+    available_actions:  {type: "list[str]",   description: All valid action strings}
+    turn_number:        {type: int,         description: Turn within current scenario}
+    total_turns:        {type: int,         description: Total turns in current scenario}
+    episode_step:       {type: int,         description: Global step counter}
+    last_action_result: {type: "str|null",    description: Feedback from previous action}
+    cumulative_reward:  {type: float,       description: Total reward earned so far}
+
+reward:
+  range: [-1.0, 1.0]
+  shaped: true
+  per_step: true
+  components:
+    - name: optimal_action
+      description: Agent chose the best action for this turn
+      value: 0.2 to 0.5 (turn-specific)
+    - name: acceptable_action
+      description: Agent chose a reasonable but not ideal action
+      value: 0.1 to 0.3 (turn-specific)
+    - name: dangerous_action
+      description: Agent chose an action that could cause harm
+      value: -0.5 to -0.9 (turn-specific)
+    - name: credential_leak
+      description: Additional penalty for sharing OTP or PIN
+      value: -0.2
+    - name: financial_loss
+      description: Additional penalty for paying scammer or scanning QR
+      value: -0.1
+    - name: reasoning_bonus
+      description: Small bonus when agent provides reasoning > 20 chars
+      value: +0.02
+
+episode:
+  termination_conditions:
+    - all_scenario_turns_completed
+    - max_steps_50
+  max_steps: 50
+
+recovery_sequence:
+  description: >
+    For scenarios where money has already been lost, the optimal recovery
+    sequence is: take_screenshot → call_bank_helpline → raise_upi_dispute →
+    file_cybercrime. This follows RBI and NPCI guidelines.
+  steps:
+    1: take_screenshot     # Preserve evidence (transaction ID, scammer VPA)
+    2: call_bank_helpline  # Request chargeback (call within 30 minutes)
+    3: raise_upi_dispute   # File dispute in PhonePe/GPay/BHIM app
+    4: file_cybercrime     # Report to cybercrime.gov.in or dial 1930
+
+api:
+  reset:    POST /reset
+  step:     POST /step
+  state:    GET  /state/{session_id}
+  grade:    POST /grade
+  tasks:    GET  /tasks
+  scenarios: GET /scenarios
+  actions:  GET  /actions
+
+baseline_scores:
+  model: gpt-4o-mini
+  temperature: 0
+  easy:   0.76
+  medium: 0.63
+  hard:   0.51
+  note: "Scores are reproducible. Run inference.py with the required environment variables to verify."
+
+setup:
+  python_version: ">=3.10"
+  install: pip install -r requirements.txt
+  run_server: uvicorn server:app --host 0.0.0.0 --port 7860
+  run_baseline: API_BASE_URL=https://api-inference.huggingface.co/v1/ MODEL_NAME=meta-llama/Meta-Llama-3.1-70B-Instruct HF_TOKEN=hf-... python inference.py
+  docker: docker build -t upi-fraud-env . && docker run -p 7860:7860 upi-fraud-env
+
+references:
+  - "NPCI Annual Report 2023-24: UPI fraud statistics"
+  - "RBI guidelines on UPI fraud recovery (Circular RBI/2022-23/182)"
+  - "MeitY Cyber Dost: Common UPI fraud patterns"
+  - "1930 National Cyber Crime Helpline"
+  - "cybercrime.gov.in"
