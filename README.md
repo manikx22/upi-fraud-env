@@ -1,3 +1,14 @@
+---
+title: UPI Fraud Prevention OpenEnv
+emoji: 🛡️
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+license: mit
+short_description: OpenEnv environment for UPI fraud prevention and recovery in India
+---
+
 # UPI Fraud Prevention & Recovery — OpenEnv
 
 [![OpenEnv](https://img.shields.io/badge/OpenEnv-compliant-green)](https://openenv.dev)
