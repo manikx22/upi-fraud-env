@@ -4,7 +4,7 @@ All endpoints follow the OpenEnv spec: /reset, /step, /state, /grade, /tasks.
 """
 
 import uuid
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -107,7 +107,7 @@ def list_actions():
     }
 
 @app.post("/reset")
-def reset(req: ResetRequest):
+def reset(req: ResetRequest = Body(default_factory=ResetRequest)):
     session_id = str(uuid.uuid4())
     env = UPIFraudEnv(task_id=req.task_id, seed=req.seed)
     obs = env.reset()
