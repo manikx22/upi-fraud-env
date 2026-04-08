@@ -28,7 +28,7 @@ from openai import OpenAI
 
 from environment import UPIFraudEnv, Action, TurnObservation
 from tasks import TASKS, grade_task
-from scenarios import ActionType, get_scenario
+from scenarios import ActionType
 
 # ─── Environment variable configuration ──────────────────────────────────────
 
@@ -144,31 +144,8 @@ def format_observation(obs: TurnObservation) -> str:
 
 # ─── Agent action getter ──────────────────────────────────────────────────────
 
-def oracle_action_type(obs: TurnObservation) -> ActionType | None:
-    """
-    Environment-grounded expert policy.
-
-    Uses the published scenario definition to retrieve the canonical optimal
-    action for the current turn. This keeps the inference runner deterministic
-    and guarantees that action selection stays aligned with the environment's
-    grading rules.
-    """
-    try:
-        scenario = get_scenario(obs.scenario_id)
-        turn = scenario.turns[obs.turn_number - 1]
-        return turn.optimal_action
-    except Exception:
-        return None
-
 def get_agent_action(obs: TurnObservation, task_id: str, step: int) -> Action:
     prompt = f"Current fraud situation:\n\n{format_observation(obs)}\n\nWhat should the user do now?"
-    expert_action = oracle_action_type(obs)
-    if task_id == "hard" and step == 0:
-        # The hard grader requires recovery coverage in addition to turn-level
-        # correctness. Injecting one bank-help action prevents the hard-task
-        # recovery cap while keeping the policy safe and deterministic.
-        expert_action = ActionType.CALL_BANK_HELPLINE
-    model_reasoning = ""
 
     try:
         response = client.chat.completions.create(
@@ -190,10 +167,9 @@ def get_agent_action(obs: TurnObservation, task_id: str, step: int) -> Action:
 
         data = json.loads(raw)
         action_str = data.get("action_type", "hang_up").strip().lower()
-        model_reasoning = data.get("reasoning", "").strip()
 
         try:
-            parsed_action = ActionType(action_str)
+            action_type = ActionType(action_str)
         except ValueError:
             # Fallback: map common model outputs
             fallback_map = {
@@ -202,26 +178,20 @@ def get_agent_action(obs: TurnObservation, task_id: str, step: int) -> Action:
                 "block":   ActionType.BLOCK_CONTACT,
                 "report":  ActionType.REPORT_TO_NPCI,
             }
-            parsed_action = next(
+            action_type = next(
                 (v for k, v in fallback_map.items() if k in action_str),
                 ActionType.HANG_UP,
             )
 
         return Action(
-            action_type=expert_action or parsed_action,
-            reasoning=model_reasoning or "Chosen using environment-grounded optimal action policy.",
+            action_type=action_type,
+            reasoning=data.get("reasoning", ""),
         )
 
     except json.JSONDecodeError:
-        return Action(
-            action_type=expert_action or ActionType.HANG_UP,
-            reasoning="JSON parse error — falling back to environment-grounded action policy.",
-        )
+        return Action(action_type=ActionType.HANG_UP, reasoning="JSON parse error — defaulting to hang_up")
     except Exception as e:
-        return Action(
-            action_type=expert_action or ActionType.HANG_UP,
-            reasoning=f"API error — falling back to environment-grounded action policy: {str(e)[:60]}",
-        )
+        return Action(action_type=ActionType.HANG_UP, reasoning=f"API error: {str(e)[:60]}")
 
 
 # ─── Task runner ──────────────────────────────────────────────────────────────
