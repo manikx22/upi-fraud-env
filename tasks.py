@@ -64,6 +64,11 @@ TASKS = [
 TASK_BY_ID = {t.id: t for t in TASKS}
 
 
+def _strict_unit_interval(score: float) -> float:
+    """Clamp scores to the open interval (0, 1) for platform validators."""
+    return round(min(0.999, max(0.001, score)), 3)
+
+
 # ─── Graders ──────────────────────────────────────────────────────────────────
 
 def grade_easy(agent_actions: list[Action], seed: int = 42) -> float:
@@ -106,7 +111,7 @@ def grade_easy(agent_actions: list[Action], seed: int = 42) -> float:
             per_turn_scores.append(0.3)  # neutral
 
     if not per_turn_scores:
-        return 0.0
+        return _strict_unit_interval(0.0)
 
     # Total turns expected
     total_turns = sum(len(s.turns) for s in env._scenarios)
@@ -121,7 +126,7 @@ def grade_easy(agent_actions: list[Action], seed: int = 42) -> float:
     if disqualified:
         score = min(score, 0.20)
 
-    return round(min(1.0, score), 3)
+    return _strict_unit_interval(score)
 
 
 def grade_medium(agent_actions: list[Action], seed: int = 123) -> float:
@@ -164,7 +169,7 @@ def grade_medium(agent_actions: list[Action], seed: int = 123) -> float:
             per_turn_scores.append(0.3)
 
     if not per_turn_scores:
-        return 0.0
+        return _strict_unit_interval(0.0)
 
     action_score = (sum(per_turn_scores) / len(per_turn_scores)) * 0.50
 
@@ -186,7 +191,7 @@ def grade_medium(agent_actions: list[Action], seed: int = 123) -> float:
     if credential_shared:
         score = min(score, 0.30)
 
-    return round(min(1.0, score), 3)
+    return _strict_unit_interval(score)
 
 
 def grade_hard(agent_actions: list[Action], seed: int = 999) -> float:
@@ -231,7 +236,7 @@ def grade_hard(agent_actions: list[Action], seed: int = 999) -> float:
             per_turn_scores.append(0.3)
 
     if not per_turn_scores:
-        return 0.0
+        return _strict_unit_interval(0.0)
 
     action_score = (sum(per_turn_scores) / len(per_turn_scores)) * 0.40
 
@@ -262,7 +267,7 @@ def grade_hard(agent_actions: list[Action], seed: int = 999) -> float:
     if len(recovery_missing) >= 2:
         score = min(score, 0.40)
 
-    return round(min(1.0, score), 3)
+    return _strict_unit_interval(score)
 
 
 def _score_sequence(actions: list[ActionType], expected_order: list[ActionType]) -> float:
