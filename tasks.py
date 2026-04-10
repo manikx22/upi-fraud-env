@@ -2,7 +2,7 @@
 Tasks and Graders for UPI Fraud Prevention & Recovery Environment.
 
 3 tasks: easy → medium → hard
-Each grader is deterministic and returns a score in [0.0, 1.0].
+Each grader is deterministic and returns a score strictly in (0.0, 1.0) — endpoints excluded per spec.
 """
 
 from dataclasses import dataclass
@@ -64,11 +64,6 @@ TASKS = [
 TASK_BY_ID = {t.id: t for t in TASKS}
 
 
-def _strict_unit_interval(score: float) -> float:
-    """Clamp scores to the open interval (0, 1) for platform validators."""
-    return round(min(0.999, max(0.001, score)), 3)
-
-
 # ─── Graders ──────────────────────────────────────────────────────────────────
 
 def grade_easy(agent_actions: list[Action], seed: int = 42) -> float:
@@ -81,7 +76,7 @@ def grade_easy(agent_actions: list[Action], seed: int = 42) -> float:
       0.10 — completion bonus (all turns processed)
 
     Disqualifier: any PAY_SCAMMER or SCAN_QR caps score at 0.20.
-    Returns float in [0.0, 1.0].
+    Returns float strictly in (0.001, 0.999).
     """
     env = UPIFraudEnv(task_id="easy", seed=seed)
     obs = env.reset()
@@ -111,14 +106,14 @@ def grade_easy(agent_actions: list[Action], seed: int = 42) -> float:
             per_turn_scores.append(0.3)  # neutral
 
     if not per_turn_scores:
-        return _strict_unit_interval(0.0)
+        return 0.001
 
     # Total turns expected
     total_turns = sum(len(s.turns) for s in env._scenarios)
     completion = len(per_turn_scores) / max(1, total_turns)
 
     action_score = (sum(per_turn_scores) / len(per_turn_scores)) * 0.60
-    safety_bonus = 0.30 if dangerous_count == 0 else max(0.0, 0.30 - dangerous_count * 0.10)
+    safety_bonus = 0.30 if dangerous_count == 0 else max(0.001, 0.30 - dangerous_count * 0.10)
     completion_bonus = completion * 0.10
 
     score = action_score + safety_bonus + completion_bonus
@@ -126,7 +121,7 @@ def grade_easy(agent_actions: list[Action], seed: int = 42) -> float:
     if disqualified:
         score = min(score, 0.20)
 
-    return _strict_unit_interval(score)
+    return round(max(0.001, min(0.999, score)), 3)
 
 
 def grade_medium(agent_actions: list[Action], seed: int = 123) -> float:
@@ -140,7 +135,7 @@ def grade_medium(agent_actions: list[Action], seed: int = 123) -> float:
       0.20 — no re-victimisation (agent correctly rejected the second scam call)
 
     Critical: any SHARE_OTP or SHARE_PIN caps score at 0.30.
-    Returns float in [0.0, 1.0].
+    Returns float strictly in (0.001, 0.999).
     """
     env = UPIFraudEnv(task_id="medium", seed=seed)
     obs = env.reset()
@@ -169,7 +164,7 @@ def grade_medium(agent_actions: list[Action], seed: int = 123) -> float:
             per_turn_scores.append(0.3)
 
     if not per_turn_scores:
-        return _strict_unit_interval(0.0)
+        return 0.001
 
     action_score = (sum(per_turn_scores) / len(per_turn_scores)) * 0.50
 
@@ -191,7 +186,7 @@ def grade_medium(agent_actions: list[Action], seed: int = 123) -> float:
     if credential_shared:
         score = min(score, 0.30)
 
-    return _strict_unit_interval(score)
+    return round(max(0.001, min(0.999, score)), 3)
 
 
 def grade_hard(agent_actions: list[Action], seed: int = 999) -> float:
@@ -207,7 +202,7 @@ def grade_hard(agent_actions: list[Action], seed: int = 999) -> float:
     Hard penalties:
       - Any SHARE_OTP or SHARE_PIN: −0.4 final penalty
       - Missing recovery steps (bank + dispute + cybercrime): cap at 0.40
-    Returns float in [0.0, 1.0].
+    Returns float strictly in (0.001, 0.999).
     """
     env = UPIFraudEnv(task_id="hard", seed=seed)
     obs = env.reset()
@@ -236,7 +231,7 @@ def grade_hard(agent_actions: list[Action], seed: int = 999) -> float:
             per_turn_scores.append(0.3)
 
     if not per_turn_scores:
-        return _strict_unit_interval(0.0)
+        return 0.001
 
     action_score = (sum(per_turn_scores) / len(per_turn_scores)) * 0.40
 
@@ -261,13 +256,13 @@ def grade_hard(agent_actions: list[Action], seed: int = 999) -> float:
 
     # Hard penalties
     if credential_shared:
-        score = max(0.0, score - 0.4)
+        score = max(0.001, score - 0.4)
 
     recovery_missing = recovery_actions - set(action_sequence)
     if len(recovery_missing) >= 2:
         score = min(score, 0.40)
 
-    return _strict_unit_interval(score)
+    return round(max(0.001, min(0.999, score)), 3)
 
 
 def _score_sequence(actions: list[ActionType], expected_order: list[ActionType]) -> float:
@@ -277,7 +272,7 @@ def _score_sequence(actions: list[ActionType], expected_order: list[ActionType])
     """
     present = [a for a in expected_order if a in actions]
     if not present:
-        return 0.0
+        return 0.001
 
     # Check ordering: each present action should appear after the previous one
     last_idx = -1
