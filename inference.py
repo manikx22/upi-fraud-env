@@ -224,6 +224,9 @@ def run_task(task_id: str, seed: int) -> dict:
         time.sleep(0.1)
 
     result = grade_task(task_id, actions_taken)
+    result["score"] = round(min(0.999, max(0.001, result["score"])), 3)
+    result["passed"] = result["score"] >= result["success_threshold"]
+
 
     log_end(
         task_id=task_id,
